@@ -1,7 +1,5 @@
 from collections import namedtuple
-import time
 LearnMetrics = namedtuple("LearnMetrics", ["logloss", "auc"])
-
 
 class StochasticGradient(object):
     learn = None
@@ -33,7 +31,6 @@ class StochasticGradient(object):
 
     def _learn_stochastic_gradient(self, record):
         self.iterations += 1
-        time.sleep(0.001)
         #print "I'm stochastic gradient"
         pass
 

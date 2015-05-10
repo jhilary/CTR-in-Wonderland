@@ -32,7 +32,6 @@ class RecordsGenerator(object):
 
     @staticmethod
     def create_types(headers):
-        print headers
         types = []
         for header in headers.split(","):
             if header.startswith("CA") or header.startswith("AT"): #DAFUQ
