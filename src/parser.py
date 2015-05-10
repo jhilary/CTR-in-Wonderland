@@ -3,7 +3,7 @@ class LabelType(object):
     def __init__(self, name):
         self.name = name
     def __call__(self, value):
-        return value
+        return int(value)
 
 
 class CategoricalType(object):
@@ -21,8 +21,8 @@ class PlainType(object):
 
     def __call__(self, value):
         if value is None:
-            return {"0", None}
-        return {"0", float(value)}
+            return {"0": None}
+        return {"0": float(value)}
 
 
 class RecordsGenerator(object):
@@ -62,6 +62,8 @@ class RecordsGenerator(object):
 
                 if isinstance(element_type, LabelType):
                     label = element
+                elif element_type.name != "CAT01":
+                    continue
                 else:
                     result_data[element_type.name] = element
             if label is None:

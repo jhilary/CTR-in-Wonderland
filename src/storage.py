@@ -9,7 +9,7 @@ from glob import glob
 import importlib
 from sgd import StochasticGradient
 
-Metric = namedtuple("Metric", ["iterations", "time", "memory", "logloss"])
+Metric = namedtuple("Metric", ["iterations", "time", "memory", "logloss", "clicks", "not_clicks"])
 
 
 class MetricsGenerator(object):
@@ -19,11 +19,13 @@ class MetricsGenerator(object):
     def __call__(self):
         self.stream.readline()
         for line in self.stream:
-            iteration, time_for_iterations, memory, logloss = line.split("\t")
+            iteration, time_for_iterations, memory, logloss, clicks, not_clicks = line.split("\t")
             iteration = int(iteration)
             time_for_iterations = int(time_for_iterations)
             memory = int(memory) if memory is not "-" else None
             logloss = float(logloss) if logloss is not "-" else None
+            clicks = int(clicks)
+            not_clicks = int(not_clicks)
             yield Metric(iteration, time_for_iterations, memory, logloss)
 
 
@@ -34,11 +36,13 @@ def create_dir_if_not_exists(path):
 def save_metrics(path, metrics):
     for metric in metrics:
         with open(path, 'a', 0) as f:
-            f.write("%s\t%s\t%s\t%s\n" % (
+            f.write("%s\t%s\t%s\t%s\t%s\t%s\n" % (
                 metric.iterations,
                 metric.time,
                 metric.memory if metric.memory is not None else '-',
-                metric.logloss if metric.logloss is not None else '-')
+                metric.logloss if metric.logloss is not None else '-',
+                metric.clicks,
+                metric.not_clicks)
             )
 
 

@@ -3,19 +3,23 @@
 import fileinput
 import resource
 import platform
+import random
 import math
 import pickle
 from datetime import datetime
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 from parser import RecordsGenerator
-from sgd import StochasticGradient, LearnMetrics
+from sgd import StochasticGradient
 from storage import LocalFileStorage, Metric
 # def eta(sg):
 #     return 1./math.sqrt(sg.iteration_number)
 
 
-class DictStorage(dict):
+class DictStorage(defaultdict):
     module = "main"
+
+    def __init__(self, *args, **kwargs):
+        super(DictStorage, self).__init__(dict)
 
     @staticmethod
     def load(f):
@@ -32,27 +36,26 @@ def get_memory_usage():
 
 def main():
     path = "/home/ilariia/CTR-in-Wonderland"
-    storage = LocalFileStorage(path, 'v0')
+    storage = LocalFileStorage(path, 'v2')
     weight_storage = DictStorage()
+    subsampling_not_clicks_rate = 0.3
     records_generator = RecordsGenerator(fileinput.input())
     iterations_before_dumping_metrics = 10000
 
+    SG = StochasticGradient(weight_storage, scales_not_clicks=1/subsampling_not_clicks_rate, rate="ada_grad")
 
-    SG = StochasticGradient(weight_storage)
-
-    iterations_counter = 0
     start_time = datetime.now()
-    result = LearnMetrics(None, None)
     for record in records_generator():
-        result = SG.predict(record)
+        factors, label = record
+        if label == 0 and random.random() > subsampling_not_clicks_rate:
+            continue
         SG.learn(record)
-        iterations_counter += 1
-        if iterations_counter % iterations_before_dumping_metrics == 0:
-            metric = Metric(iterations_counter, (datetime.now() - start_time).seconds, get_memory_usage(), result.logloss) # total_seconds?
+        if SG.iterations % iterations_before_dumping_metrics == 0:
+            metric = Metric(SG.iterations, (datetime.now() - start_time).seconds, get_memory_usage(), SG.progressive_validation_logloss, SG.clicks, SG.not_clicks) # total_seconds?
             storage.save_metrics([metric])
 
     #save metrics at the end of all iterations
-    metric = Metric(iterations_counter, (datetime.now() - start_time).seconds, get_memory_usage(), result.logloss) # total_seconds?
+    metric = Metric(SG.iterations, (datetime.now() - start_time).seconds, get_memory_usage(), SG.progressive_validation_logloss, SG.clicks, SG.not_clicks) # total_seconds?
     storage.save_metrics([metric])
 
     storage.save_model(SG) # в формате sparsehash, че он там читает? Можно слить вообще прямо в бинарном виде, если он позволяет
