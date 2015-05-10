@@ -8,6 +8,7 @@ from collections import namedtuple, OrderedDict
 from glob import glob
 import importlib
 from sgd import StochasticGradient
+
 Metric = namedtuple("Metric", ["iterations", "time", "memory", "logloss"])
 
 

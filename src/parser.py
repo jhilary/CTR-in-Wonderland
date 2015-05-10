@@ -31,9 +31,10 @@ class RecordsGenerator(object):
         self.types = self.create_types(stream.readline())
 
     @staticmethod
-    def create_types(header):
+    def create_types(headers):
+        print headers
         types = []
-        for header in header.split(","):
+        for header in headers.split(","):
             if header.startswith("CA") or header.startswith("AT"): #DAFUQ
                 types.append(CategoricalType(header))
             elif header.startswith("NUM"):

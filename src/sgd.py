@@ -1,6 +1,6 @@
 from collections import namedtuple
-
-LearnMetrics = namedtuple("LearnResult", ["logloss", "auc"])
+import time
+LearnMetrics = namedtuple("LearnMetrics", ["logloss", "auc"])
 
 
 class StochasticGradient(object):
@@ -21,14 +21,19 @@ class StochasticGradient(object):
         self.subsampling = subsampling
         self.progressive_validation = progressive_validation
         self.progressive_validation_depth = progressive_validation_depth
+        self.iterations = 0
+        self.result = LearnMetrics(None, None)
 
         self.learn = self._choose_algo(algorithm)
 
     def _learn_ftrl_proximal(self, record):
+        self.iterations += 1
         #print "I'm ftrl proximal"
         pass
 
     def _learn_stochastic_gradient(self, record):
+        self.iterations += 1
+        time.sleep(0.001)
         #print "I'm stochastic gradient"
         pass
 
@@ -41,4 +46,5 @@ class StochasticGradient(object):
 
 
     def predict(self, record):
-        return LearnMetrics(None, None)
+        self.result = LearnMetrics(1, 2)
+        return self.result
