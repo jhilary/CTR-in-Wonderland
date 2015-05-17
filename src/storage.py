@@ -1,15 +1,11 @@
 import os
 import yaml
-import sys
 import shutil
-import pickle
-from datetime import datetime
 from collections import namedtuple, OrderedDict
-from glob import glob
 import importlib
 from sgd import StochasticGradient
 
-Metric = namedtuple("Metric", ["iterations", "time", "memory", "logloss", "clicks", "not_clicks"])
+Metric = namedtuple("Metric", ["records", "iterations", "time", "memory", "logloss", "clicks", "not_clicks"])
 
 
 class MetricsGenerator(object):
@@ -19,24 +15,27 @@ class MetricsGenerator(object):
     def __call__(self):
         self.stream.readline()
         for line in self.stream:
-            iteration, time_for_iterations, memory, logloss, clicks, not_clicks = line.split("\t")
+            records, iteration, time_for_iterations, memory, logloss, clicks, not_clicks = line.split("\t")
+            records = int(records)
             iteration = int(iteration)
             time_for_iterations = int(time_for_iterations)
             memory = int(memory) if memory is not "-" else None
             logloss = float(logloss) if logloss is not "-" else None
             clicks = int(clicks)
             not_clicks = int(not_clicks)
-            yield Metric(iteration, time_for_iterations, memory, logloss)
+            yield Metric(records, iteration, time_for_iterations, memory, logloss, clicks, not_clicks)
 
 
 def create_dir_if_not_exists(path):
     if not os.path.exists(path):
         os.makedirs(path)
 
+
 def save_metrics(path, metrics):
     for metric in metrics:
         with open(path, 'a', 0) as f:
-            f.write("%s\t%s\t%s\t%s\t%s\t%s\n" % (
+            f.write("%s\t%s\t%s\t%s\t%s\t%s\t%s\n" % (
+                metric.records,
                 metric.iterations,
                 metric.time,
                 metric.memory if metric.memory is not None else '-',
@@ -48,7 +47,7 @@ def save_metrics(path, metrics):
 
 def init_metrics(path):
     with open(path, 'w', 0) as f:
-        f.write("# Iteration\tTime\tMemory\tLogloss\n")
+        f.write("# Records\tIterations\tTime\tMemory\tLogloss\tClicks\tNotClicks\n")
 
 
 # class BaseLocalFileStorage(object):
@@ -84,16 +83,13 @@ class LocalFileStorage(object):
         self.work_path_dir = os.path.join(path, identifier)
         self.__metric_path = os.path.join(self.work_path_dir, "metrics.tsv")
         self.__parameters_path = os.path.join(self.work_path_dir, "parameters.yml")
-        self.model_path_dir = os.path.join(self.work_path_dir, 'model')
+        self.__weights_path = os.path.join(self.work_path_dir, "weights")
         self.is_initialized_metrics = False
         self.init()
 
-    def __model_path(self, identifier):
-        return os.path.join(self.model_path_dir, str(identifier))
 
     def init(self):
         create_dir_if_not_exists(self.work_path_dir)
-        create_dir_if_not_exists(self.model_path_dir)
 
     def save_parameters(self, parameters):
         with open(self.__parameters_path, 'w', 0) as f:
@@ -127,35 +123,17 @@ class LocalFileStorage(object):
         module = importlib.import_module(module_name)
         return getattr(module, function_name)()
 
-    def save_model(self, sg):
-        with open(self.__model_path("weights"), 'w') as f:
-            sg.weights_storage.save(f)
+    def dump_weights_storage(self, weights_storage):
+        with open(self.__weights_path, 'w') as f:
+            weights_storage.save(f)
 
-        #TODO make pickle weight storage instead of pass like this XXX
-        self.save_parameters(
-            OrderedDict([
-            ("weights_storage", self.weight_storage_to_str(sg.weights_storage)),
-            ("algorithm", sg.algorithm),
-            ("feature_filter", sg.feature_filter),
-            ("rate", sg.rate),
-            ("ada_grad_alpha", sg.ada_grad_alpha),
-            ("ada_grad_beta", sg.ada_grad_beta),
-            ("ftrl_proximal_lambda_1", sg.ftrl_proximal_lambda_1),
-            ("ftrl_proximal_lambda_2", sg.ftrl_proximal_lambda_2),
-            ("subsampling", sg.subsampling),
-            ("progressive_validation", sg.progressive_validation),
-            ("progressive_validation_depth", sg.progressive_validation_depth)
-            ]))
-
-    def load_model(self):
+    def load_weights_storage(self):
         parameters = self.get_parameters()
+        weights_storage = self.str_to_weight_storage(parameters["weights_storage"])
 
-        parameters["weights_storage"] = self.str_to_weight_storage(parameters["weights_storage"])
+        with open(self.__weights_path, 'r') as f:
+            weights_storage.load(f)
 
-        with open(self.__model_path("weights"), 'r') as f:
-            parameters["weights_storage"].load(f)
-
-        #If we load model, most probably that we want to continue learning. So we don't need to clean metrics progress
         self.is_initialized_metrics = os.path.exists(self.__metric_path)
 
-        return StochasticGradient(**parameters)
+        return weights_storage
