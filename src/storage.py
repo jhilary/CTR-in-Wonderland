@@ -1,11 +1,14 @@
 import os
 import yaml
+import pickle
 import shutil
-from collections import namedtuple, OrderedDict
 import importlib
-from sgd import StochasticGradient
+import cPickle
+
+from collections import namedtuple
 
 Metric = namedtuple("Metric", ["records", "iterations", "time", "memory", "logloss", "clicks", "not_clicks"])
+Prediction = namedtuple("Prediction", ["record_id", 'value'])
 
 
 class MetricsGenerator(object):
@@ -44,49 +47,39 @@ def save_metrics(path, metrics):
                 metric.not_clicks)
             )
 
+def save_predictions(path, predictions):
+    for prediction in predictions:
+        with open(path, 'a', 0) as f:
+            f.write("%s,%s\n" % (
+                prediction.record_id,
+                prediction.value)
+            )
+
+def init_predictions(path):
+    with open(path, 'w', 0) as f:
+        f.write("ID,Prediction\n")
 
 def init_metrics(path):
     with open(path, 'w', 0) as f:
         f.write("# Records\tIterations\tTime\tMemory\tLogloss\tClicks\tNotClicks\n")
 
 
-# class BaseLocalFileStorage(object):
-#     def __init__(self, path):
-#         self.root_path = path
-#         self.images_dir_path = os.path.join(self.root_path, "images")
-#         self.third_part_resources = os.path.join(path, 'resources')
-#
-#     def init(self):
-#         create_dir_if_not_exists(self.images_dir_path)
-#
-#     def __image_path(self, identifier):
-#         return "%s.png" % os.path.join(self.images_dir_path, identifier)
-#
-#     def third_part_resource_path(self, identifier):
-#         return os.path.join(self.third_part_resources, str(identifier))
-#
-#     def get_batches_filenames(self, identifier):
-#         batches_template = os.path.join(self.third_part_resource_path(identifier), "*.batch")
-#         return glob(batches_template)
-#
-#     def get_dictionary_filename(self, identifier):
-#         return os.path.join(self.third_part_resource_path(identifier), 'dictionary')
-#
-#     def save_image(self, image, identifier):
-#         identifier = str(identifier)
-#         image.savefig(self.__image_path(identifier))
-
-
 class LocalFileStorage(object):
     def __init__(self, path, identifier):
         self.root_path = path
         self.work_path_dir = os.path.join(path, identifier)
-        self.__metric_path = os.path.join(self.work_path_dir, "metrics.tsv")
         self.__parameters_path = os.path.join(self.work_path_dir, "parameters.yml")
         self.__weights_path = os.path.join(self.work_path_dir, "weights")
-        self.is_initialized_metrics = False
+        self._model_path = os.path.join(self.work_path_dir, "model")
+        self.is_initialized_metrics = set()
+        self.is_initialized_predictions = set()
         self.init()
 
+    def __metrics_path(self, identifier='metrics.tsv'):
+        return os.path.join(self.work_path_dir, identifier)
+
+    def __predictions_path(self, identifier='predictions.tsv'):
+        return os.path.join(self.work_path_dir, identifier)
 
     def init(self):
         create_dir_if_not_exists(self.work_path_dir)
@@ -99,15 +92,24 @@ class LocalFileStorage(object):
         with open(self.__parameters_path, 'r') as f:
             return yaml.load(f)
 
-    def save_metrics(self, metrics):
-        if not self.is_initialized_metrics:
-            self.is_initialized_metrics = True
-            init_metrics(self.__metric_path)
-        save_metrics(self.__metric_path, metrics)
+    def save_metrics(self, metrics, identifier='metrics.tsv'):
+        metrics_path = self.__metrics_path(identifier)
+        if identifier not in self.is_initialized_metrics:
+            self.is_initialized_metrics.add(identifier)
+            init_metrics(metrics_path)
+        save_metrics(metrics_path, metrics)
 
-    def get_metrics(self):
-        with open(self.__metric_path, 'r') as f:
+    def get_metrics(self, identifier='metrics.tsv'):
+        with open(self.__metrics_path(identifier), 'r') as f:
             return [metric for metric in MetricsGenerator(f)()]
+
+    def save_predictions(self, predictions, identifier='predictions.tsv'):
+        predictions_path = self.__predictions_path(identifier)
+        if identifier not in self.is_initialized_predictions:
+            self.is_initialized_predictions.add(identifier)
+            init_predictions(predictions_path)
+        save_predictions(predictions_path, predictions)
+
 
     def clean(self):
         if os.path.exists(self.work_path_dir):
@@ -127,6 +129,14 @@ class LocalFileStorage(object):
         with open(self.__weights_path, 'w') as f:
             weights_storage.save(f)
 
+    def save(self, model):
+        with open(self._model_path, 'w') as f:
+            cPickle.dump(model, f)
+
+    def load(self):
+        with open(self._model_path, 'r') as f:
+            return cPickle.load(f)
+
     def load_weights_storage(self):
         parameters = self.get_parameters()
         weights_storage = self.str_to_weight_storage(parameters["weights_storage"])
@@ -134,6 +144,7 @@ class LocalFileStorage(object):
         with open(self.__weights_path, 'r') as f:
             weights_storage.load(f)
 
-        self.is_initialized_metrics = os.path.exists(self.__metric_path)
+        self.is_initialized_metrics = os.path.exists(self.__metrics_path())
 
         return weights_storage
+

@@ -6,6 +6,12 @@ class Label(object):
             raise ValueError("Bad label %s provided" % value)
 
 
+class ID(object):
+    def __init__(self, value):
+        self.name = "ID"
+        self.value = int(value)
+
+
 class CategoricalFeature(object):
     def __init__(self, value):
         if value is None:

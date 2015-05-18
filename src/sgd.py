@@ -1,13 +1,13 @@
 import math
 from collections import deque, defaultdict
-from metrics import ll
-from feature_types import PlainFeature, CategoricalFeature, Label
+from ciw.metrics import ll
+from ciw.feature_types import PlainFeature
 
 
 class StochasticGradient(object):
-    learn = None
-    rate_func = None
-    process_missing_values = None
+    # learn = None
+    # rate_func = None
+    # process_missing_values = None
 
     def basic_rate(self, *args):
         return 1.0/math.sqrt(self.iterations)
@@ -41,8 +41,8 @@ class StochasticGradient(object):
         self.normalize_plain_features = normalize_plain_features
         self.iterations = 0
 
-        self.learn = self._choose_algo(algorithm)
-        self.rate_func = self._choose_rate(rate)
+        self.learn = self._choose_algo(self.algorithm)
+        self.rate_func = self._choose_rate(self.rate)
 
         if self.progressive_validation:
             self.progressive_validation_queue = deque(maxlen=progressive_validation_depth)
@@ -100,29 +100,29 @@ class StochasticGradient(object):
 
         self.iterations += 1
 
-        record_factors, record_label = record
+        # record_factors, record_label = record
 
-        if record_label.value == 0:
+        if record.label.value == 0:
             self.not_clicks += 1
         else:
             self.clicks += 1
 
         if self.add_bias:
-            record_factors["BIAS"] = PlainFeature(1)
-
-        predicted_label = self.predict_proba(record_factors)
+            record.factors["BIAS"] = PlainFeature(1)
 
         record_weight = 1
-        if self.subsampling and record_label.value == self.subsampling_label:
-            record_weight = 1.0/self.subsampling_rate
+        # if self.subsampling and record_label.value == self.subsampling_label:
+        #     record_weight = 1.0/self.subsampling_rate
 
         if self.normalize_plain_features:
-            self.update_ng_normalize_parameters_and_weights(record_factors)
+            self.update_ng_normalize_parameters_and_weights(record.factors)
 
-        for namespace, feature in record_factors.iteritems():
+        predicted_label = self.predict_proba(record.factors)
+
+        for namespace, feature in record.factors.iteritems():
             value = self.process_missing_values(namespace, feature)
             #print namespace, "value:", value, "Label:", record_label.value, "Predicted label:", predicted_label
-            g = (record_label.value - predicted_label) * value * record_weight
+            g = (record.label.value - predicted_label) * value
             #print "G:", g
 
             weight, g_square = self.weights_storage[namespace].get(feature.name, (0, 0))
@@ -132,12 +132,15 @@ class StochasticGradient(object):
             else:
                 features_normalizer = 1
 
-            self.weights_storage[namespace][feature.name] = (weight + self.rate_func(g_square) * features_normalizer * g, g_square + (g ** 2))
+            # if isinstance(feature, PlainFeature):
+            #     self.weights_storage[namespace][feature.name] = (weight + features_normalizer * g, g_square + (g ** 2))
+            # else:
+            self.weights_storage[namespace][feature.name] = (weight + self.rate_func(g_square) * features_normalizer * record_weight * g, g_square + record_weight * (g ** 2))
 
 
             #print "Weight:", weight, "New weight", self.weights_storage[namespace][feature.name]
         if self.progressive_validation:
-            self.progressive_validation_queue.append((record_weight * ll([record_label.value],[predicted_label]),record_weight))
+            self.progressive_validation_queue.append((record_weight * ll([record.label.value],[predicted_label]),record_weight))
 
     def _choose_algo(self, label):
         if label == "sg":
@@ -191,7 +194,8 @@ class StochasticGradient(object):
             #print "Feature weight:", self.weights_storage[namespace].get(feature.name, (0,0))[0]
             total += self.weights_storage[namespace].get(feature.name, (0,0))[0] * value
         try:
-            return 1.0/(1 + math.exp(-1 * total))
+            p = 1.0/(1 + math.exp(-1 * total))
+            return p / (p + (1-p)/self.subsampling_rate)
         except OverflowError:
             if total > 0:
                 return 1
@@ -203,3 +207,16 @@ class StochasticGradient(object):
         if proba > 0.5:
             return 1
         return 0
+
+    def __getstate__(self):
+        odict = self.__dict__.copy() # copy the dict since we change it
+        del odict['process_missing_values']
+        del odict['learn']
+        del odict['rate_func']
+        return odict
+
+    def __setstate__(self, dict):
+        self.__dict__.update(dict)
+        self.process_missing_values = self._choose_missing_values(self.missing_plain_values)
+        self.learn = self._choose_algo(self.algorithm)
+        self.rate_func = self._choose_rate(self.rate)

@@ -1,4 +1,10 @@
-from feature_types import PlainFeature, CategoricalFeature, Label
+from ciw.feature_types import PlainFeature, CategoricalFeature, Label, ID
+
+class Record(object):
+    def __init__(self, label, factors, record_id):
+        self.label = label
+        self.factors = factors
+        self.record_id = record_id
 
 class RecordsGenerator(object):
     def __init__(self, stream, records_filter=None):
@@ -18,6 +24,8 @@ class RecordsGenerator(object):
                 types.append((header, PlainFeature))
             elif header == "CLICK":
                 types.append((header, Label))
+            elif header == "ID":
+                types.append((header, ID))
             else:
                 raise ValueError("Bad header %s is given in headers" % header)
         return types
@@ -32,6 +40,7 @@ class RecordsGenerator(object):
             line_split = line.strip().split(",")
             features = {}
             label = None
+            record_id = None
             for i in xrange(len(line_split)):
                 element_value = line_split[i]
                 if self.is_missing(element_value):
@@ -41,11 +50,13 @@ class RecordsGenerator(object):
                 feature = feature_type(element_value)
                 if isinstance(feature, Label):
                     label = feature
-                elif isinstance(feature, CategoricalFeature):
+                elif isinstance(feature, ID):
+                    record_id = feature
+                else:
                     features[namespace] = feature
             if label is None:
                 print "Warning: missing label for line"
-            record = features, label
+            record = Record(label,features,record_id)
             if self.records_filter is None or self.records_filter(record):
                 self.counter_filtered += 1
                 yield record
