@@ -1,6 +1,5 @@
 import os
 import yaml
-import pickle
 import shutil
 import importlib
 import cPickle

@@ -5,7 +5,7 @@ from ciw.metrics import ll
 from ciw.feature_types import PlainFeature
 
 
-def learn(records_generator, storage, model, storage_metrics_dumping_depth):
+def learn(records_generator, storage, model, storage_metrics_dumping_depth, storage_model_dumping_depth):
     start_time = datetime.now()
     for record in records_generator():
         model.learn(record)
@@ -13,6 +13,7 @@ def learn(records_generator, storage, model, storage_metrics_dumping_depth):
             metric = Metric(records_generator.counter, model.iterations, (datetime.now() - start_time).seconds, get_memory_usage(), model.progressive_validation_logloss, model.clicks, model.not_clicks) # total_seconds?
             storage.save_metrics([metric])
             storage.dump_weights_storage(model.weights_storage)
+        if model.iterations % storage_model_dumping_depth == 0:
             storage.save(model)
     #save metrics at the end of all iterations
     if model.iterations % storage_metrics_dumping_depth != 0:
@@ -46,4 +47,4 @@ def validate(records_generator, model, storage_predictions_dumping_depth, storag
 def predict(records_generator, model, storage, identifier):
     for record in records_generator():
         record.factors["BIAS"] = PlainFeature(1)
-        storage.save_predictions([Prediction(record.record_id, model.predict_proba(record.factors))], identifier)
+        storage.save_predictions([Prediction(record.record_id.value, model.predict_proba(record.factors))], identifier)

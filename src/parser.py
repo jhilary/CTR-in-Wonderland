@@ -1,10 +1,12 @@
 from ciw.feature_types import PlainFeature, CategoricalFeature, Label, ID
 
+
 class Record(object):
     def __init__(self, label, factors, record_id):
         self.label = label
         self.factors = factors
         self.record_id = record_id
+
 
 class RecordsGenerator(object):
     def __init__(self, stream, records_filter=None):
@@ -54,8 +56,6 @@ class RecordsGenerator(object):
                     record_id = feature
                 else:
                     features[namespace] = feature
-            if label is None:
-                print "Warning: missing label for line"
             record = Record(label,features,record_id)
             if self.records_filter is None or self.records_filter(record):
                 self.counter_filtered += 1

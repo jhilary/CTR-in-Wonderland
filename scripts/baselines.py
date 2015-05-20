@@ -118,37 +118,37 @@ def get_X_y_allnum(filename):
 
 if __name__ == "__main__":
 
-    # X, y = get_X_y_cat1("../resources/learn_100000.txt")
-    #
-    # # Only Category 1 baseline
-    #
-    # print "CAT01 SGD log_loss: %s" % sgd_baseline(X, y)
-    #
-    # # Uniform baseline
-    #
-    # print "Uniform dummy classifier logloss: %s" % uniform_baseline(X[:50000], y[:50000], X[50000:], y[50000:])
-    #
-    # # Most frequent label baseline
-    #
-    # print "Most frequent dummy classifier logloss: %s" % most_frequent_baseline(X[:50000], y[:50000], X[50000:], y[50000:])
-    #
-    # # Constant baseline
-    #
-    # constant = float(sum(y))/len(y)
-    # print "Constant classifier (with constant %s) logloss: %s" % (constant, constant_baseline(y, constant))
-    #
-    # Only numerical 1 baseline
+    X, y = get_X_y_cat1("../resources/learn_100000.txt")
 
-    # X, y = get_X_y_num1("../resources/learn_100000.txt")
-    # #X, y = get_X_y_num1_b("../resources/learn_100000.txt")
-    # print "NUM01 SGD log_loss: %s" % sgd_baseline(X, y)
+    # Only Category 1 baseline
 
-    # X, y = get_X_y_num1_num2("../resources/learn_100000.txt")
-    # #X, y = get_X_y_num1_b("../resources/learn_100000.txt")
-    # print "NUM01 NUM02 SGD log_loss: %s" % sgd_baseline(X, y)
+    print "CAT01 SGD log_loss: %s" % sgd_baseline(X, y)
 
-    # X, y = get_X_y_allnum("../resources/learn_100000.txt")
-    # print "NUM all SGD log_loss: %s" % sgd_baseline(X, y)
+    # Uniform baseline
+
+    print "Uniform dummy classifier logloss: %s" % uniform_baseline(X[:50000], y[:50000], X[50000:], y[50000:])
+
+    # Most frequent label baseline
+
+    print "Most frequent dummy classifier logloss: %s" % most_frequent_baseline(X[:50000], y[:50000], X[50000:], y[50000:])
+
+    # Constant baseline
+
+    constant = float(sum(y))/len(y)
+    print "Constant classifier (with constant %s) logloss: %s" % (constant, constant_baseline(y, constant))
+
+    #Only numerical 1 baseline
+
+    X, y = get_X_y_num1("../resources/learn_100000.txt")
+    #X, y = get_X_y_num1_b("../resources/learn_100000.txt")
+    print "NUM01 SGD log_loss: %s" % sgd_baseline(X, y)
+
+    X, y = get_X_y_num1_num2("../resources/learn_100000.txt")
+    #X, y = get_X_y_num1_b("../resources/learn_100000.txt")
+    print "NUM01 NUM02 SGD log_loss: %s" % sgd_baseline(X, y)
+
+    X, y = get_X_y_allnum("../resources/learn_100000.txt")
+    print "NUM all SGD log_loss: %s" % sgd_baseline(X, y)
 
     X, y = get_X_y_allnum("../resources/learn_100000.txt")
     print "NUM all SGD log_loss: %s" % sgd_not_online_baseline(X[:50000], y[:50000], X[50000:], y[50000:])

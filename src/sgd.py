@@ -1,13 +1,11 @@
 import math
+import random
 from collections import deque, defaultdict
 from ciw.metrics import ll
-from ciw.feature_types import PlainFeature
+from ciw.feature_types import PlainFeature, CategoricalFeature
 
 
 class StochasticGradient(object):
-    # learn = None
-    # rate_func = None
-    # process_missing_values = None
 
     def basic_rate(self, *args):
         return 1.0/math.sqrt(self.iterations)
@@ -18,13 +16,20 @@ class StochasticGradient(object):
     def ada_grad_rate(self, g_square=0):
         return float(self.rate_ada_grad_alpha)/(self.rate_ada_grad_beta + math.sqrt(g_square))
 
+    def poisson_feature_filter(self, namespace, feature):
+        if isinstance(feature, CategoricalFeature) and self.weights_storage[namespace].get(feature.name) is None:
+            return random.random() < 1.0/self.feature_filter_poisson_min_shows
+        return True
+
     def __init__(self, weights_storage, algorithm="sg", add_bias=False, rate="basic", rate_constant_alpha=1, rate_ada_grad_alpha=1,
-                 rate_ada_grad_beta=1, ftrl_proximal_lambda_one=0, ftrl_proximal_lambda_two=0, feature_filter="none", subsampling=False,
+                 rate_ada_grad_beta=1, ftrl_proximal_lambda_one=0, ftrl_proximal_lambda_two=0, feature_filter="none",
+                 feature_filter_poisson_min_shows=10, subsampling="none",
                  subsampling_label=0, subsampling_rate=0.35, progressive_validation=False, progressive_validation_depth=100000, missing_plain_features="zero",
                  normalize_plain_features=False, **kwargs):
         self.weights_storage = weights_storage
         self.algorithm = algorithm
         self.feature_filter = feature_filter
+        self.feature_filter_poisson_min_shows = feature_filter_poisson_min_shows
         self.rate = rate
         self.rate_constant_alpha = rate_constant_alpha
         self.rate_ada_grad_alpha = rate_ada_grad_alpha
@@ -43,6 +48,7 @@ class StochasticGradient(object):
 
         self.learn = self._choose_algo(self.algorithm)
         self.rate_func = self._choose_rate(self.rate)
+        self.feature_filter_func = self._choose_feature_filter(self.feature_filter)
 
         if self.progressive_validation:
             self.progressive_validation_queue = deque(maxlen=progressive_validation_depth)
@@ -100,8 +106,6 @@ class StochasticGradient(object):
 
         self.iterations += 1
 
-        # record_factors, record_label = record
-
         if record.label.value == 0:
             self.not_clicks += 1
         else:
@@ -111,8 +115,8 @@ class StochasticGradient(object):
             record.factors["BIAS"] = PlainFeature(1)
 
         record_weight = 1
-        # if self.subsampling and record_label.value == self.subsampling_label:
-        #     record_weight = 1.0/self.subsampling_rate
+        if self.subsampling == "hitstat" and record.label.value == self.subsampling_label:
+            record_weight = 1.0/self.subsampling_rate
 
         if self.normalize_plain_features:
             self.update_ng_normalize_parameters_and_weights(record.factors)
@@ -120,10 +124,11 @@ class StochasticGradient(object):
         predicted_label = self.predict_proba(record.factors)
 
         for namespace, feature in record.factors.iteritems():
+            if not self.feature_filter_func(namespace, feature):
+                continue
+
             value = self.process_missing_values(namespace, feature)
-            #print namespace, "value:", value, "Label:", record_label.value, "Predicted label:", predicted_label
             g = (record.label.value - predicted_label) * value
-            #print "G:", g
 
             weight, g_square = self.weights_storage[namespace].get(feature.name, (0, 0))
 
@@ -132,13 +137,8 @@ class StochasticGradient(object):
             else:
                 features_normalizer = 1
 
-            # if isinstance(feature, PlainFeature):
-            #     self.weights_storage[namespace][feature.name] = (weight + features_normalizer * g, g_square + (g ** 2))
-            # else:
             self.weights_storage[namespace][feature.name] = (weight + self.rate_func(g_square) * features_normalizer * record_weight * g, g_square + record_weight * (g ** 2))
 
-
-            #print "Weight:", weight, "New weight", self.weights_storage[namespace][feature.name]
         if self.progressive_validation:
             self.progressive_validation_queue.append((record_weight * ll([record.label.value],[predicted_label]),record_weight))
 
@@ -157,6 +157,13 @@ class StochasticGradient(object):
         if label == "constant":
             return self.constant_rate
         raise ValueError("There are no rates with label %s; Choose: basic, ada_grad, constant" % label)
+
+    def _choose_feature_filter(self, label):
+        if label == "none":
+            return lambda namespace, feature: True
+        if label == "poisson":
+            return self.poisson_feature_filter
+        raise ValueError("There are no filters with label %s; Choose: none, poisson")
 
     def zero_missing_value(self, namespace, feature):
         if isinstance(feature, PlainFeature):
@@ -191,7 +198,6 @@ class StochasticGradient(object):
         total = 0
         for namespace, feature in factors.iteritems():
             value = self.process_missing_values(namespace, feature)
-            #print "Feature weight:", self.weights_storage[namespace].get(feature.name, (0,0))[0]
             total += self.weights_storage[namespace].get(feature.name, (0,0))[0] * value
         try:
             p = 1.0/(1 + math.exp(-1 * total))
@@ -213,6 +219,7 @@ class StochasticGradient(object):
         del odict['process_missing_values']
         del odict['learn']
         del odict['rate_func']
+        del odict['feature_filter_func']
         return odict
 
     def __setstate__(self, dict):
@@ -220,3 +227,4 @@ class StochasticGradient(object):
         self.process_missing_values = self._choose_missing_values(self.missing_plain_values)
         self.learn = self._choose_algo(self.algorithm)
         self.rate_func = self._choose_rate(self.rate)
+        self.feature_filter_func = self._choose_feature_filter(self.feature_filter)
