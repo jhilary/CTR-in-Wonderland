@@ -3,6 +3,8 @@ import sys
 import random
 import argparse
 import pickle
+import os
+from collections import MutableMapping
 from functools import partial
 from collections import defaultdict
 from ciw.parser import RecordsGenerator
@@ -11,6 +13,7 @@ from ciw.storage import LocalFileStorage
 from ciw.utils import str_to_function
 from ciw.operations import predict, learn, validate
 
+import bsddb
 
 class DictStorage(defaultdict):
     module = "ciw.main"
@@ -24,6 +27,81 @@ class DictStorage(defaultdict):
 
     def save(self, f):
         pickle.dump(self, f)
+
+
+class BerkeleyDictWrapper(MutableMapping):
+    def __init__(self, path):
+        super(BerkeleyDictWrapper, self).__init__()
+        self.bsdb_dict = bsddb.hashopen(path)
+
+    def __repr__(self):
+        return repr(self.bsdb_dict)
+
+    def __str__(self):
+        return str(self.bsdb_dict)
+
+    def __getitem__(self, key):
+        return float(self.bsdb_dict[str(key)])
+
+    def __setitem__(self, key, value):
+        self.bsdb_dict[str(key)] = str(value)
+
+    def __contains__(self, key):
+        return str(key) in self.bsdb_dict
+
+    def __delitem__(self, key):
+        del self.bsdb_dict[str(key)]
+
+    def __iter__(self):
+        return iter(self.bsdb_dict)
+
+    def __len__(self):
+        return len(self.bsdb_dict)
+
+
+class BerkeleyStorage(MutableMapping):
+    module = "ciw.main"
+
+    def __init__(self, database_folder, *args, **kwargs):
+        super(BerkeleyStorage, self).__init__()
+        self._database_folder = database_folder
+        self._storage = {}
+
+    def __setitem__(self, key, value):
+        raise NotImplementedError("This storage does not accept adding values by hand")
+
+    def __getitem__(self, key):
+        if key in self._storage:
+            return self._storage[key]
+        else:
+            new_file_path = os.path.join(self._database_folder, key)
+            self._storage[key] = BerkeleyDictWrapper(new_file_path)
+            return self._storage[key]
+
+    def __contains__(self, key):
+        return key in self._storage
+
+    def __delitem__(self, key):
+        del self._storage[key]
+
+    def __len__(self):
+        return len(self._storage)
+
+    def __iter__(self):
+        return iter(self._storage)
+
+    def __repr__(self):
+        return repr(self._storage)
+
+    def __str__(self):
+        return str(self._storage)
+
+    @staticmethod
+    def load(f):
+        pass
+
+    def save(self, f):
+        pass
 
 
 def filter_not_clicks(record, subsampling_rate):
