@@ -4,6 +4,7 @@ import random
 import argparse
 import pickle
 import os
+import cPickle
 from collections import MutableMapping
 from functools import partial
 from collections import defaultdict
@@ -32,7 +33,7 @@ class DictStorage(defaultdict):
 class BerkeleyDictWrapper(MutableMapping):
     def __init__(self, path):
         super(BerkeleyDictWrapper, self).__init__()
-        self.bsdb_dict = bsddb.hashopen(path)
+        self.bsdb_dict = bsddb.hashopen(path,cachesize=751619276L)
 
     def __repr__(self):
         return repr(self.bsdb_dict)
@@ -41,16 +42,16 @@ class BerkeleyDictWrapper(MutableMapping):
         return str(self.bsdb_dict)
 
     def __getitem__(self, key):
-        return float(self.bsdb_dict[str(key)])
+        return cPickle.loads(self.bsdb_dict[key])
 
     def __setitem__(self, key, value):
-        self.bsdb_dict[str(key)] = str(value)
+        self.bsdb_dict[key] = cPickle.dumps(value)
 
     def __contains__(self, key):
-        return str(key) in self.bsdb_dict
+        return key in self.bsdb_dict
 
     def __delitem__(self, key):
-        del self.bsdb_dict[str(key)]
+        del self.bsdb_dict[key]
 
     def __iter__(self):
         return iter(self.bsdb_dict)
@@ -95,6 +96,17 @@ class BerkeleyStorage(MutableMapping):
 
     def __str__(self):
         return str(self._storage)
+
+    def __setstate__(self, f):
+        self.__dict__.update(f)
+        self._storage = {}
+
+    def __getstate__(self):
+        for val in self._storage.values():
+            val.sync()
+        odict = self.__dict__.copy() # copy the dict since we change it
+        del odict['_storage']
+        return odict
 
     @staticmethod
     def load(f):
@@ -157,7 +169,7 @@ def ciw():
         storage = LocalFileStorage(args.storage_path, args.storage_label)
         storage.save_parameters(sorted(args.__dict__.iteritems(), key=lambda v: v[0]))
 
-        args.weights_storage = str_to_function(args.weights_storage)()
+        args.weights_storage = str_to_function(args.weights_storage)(database_folder="/home/mikari/Berkeley")
         if args.subsampling == 'hitstat':
             records_filter = partial(filter_not_clicks, subsampling_rate=args.subsampling_rate)
             records_generator = RecordsGenerator(sys.stdin, records_filter)
