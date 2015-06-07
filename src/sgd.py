@@ -2,12 +2,9 @@ import math
 import random
 from collections import deque, defaultdict
 from ciw.metrics import ll
-from ciw.feature_types import PlainFeature, CategoricalFeature
+from ciw.feature_types import PlainFeature, CategoricalFeature, FeatureInfo
 
-class FeatureInfo():
-    def __init__(self, weight, g_square):
-        self.weight = weight
-        self.g_square = g_square
+
 
 class StochasticGradient(object):
 
@@ -77,22 +74,18 @@ class StochasticGradient(object):
 
         self.feature_counter = 0
 
-
-    # def get_features_info(self, record_factors):
-    #     features_info = {}
-    #     for namespace, feature in record_factors.iteritems():
-    #         features_info[(namespace, feature)] = FeatureInfo(*self.weights_storage[namespace].get(feature.name, (0, 0)))
-    #     return features_info
+    def set_features_info(self, record_factors):
+        for namespace, feature in record_factors.iteritems():
+            feature.info = FeatureInfo(*self.weights_storage[namespace].get(feature.name, (0, 0)))
 
     def update_ng_normalize_parameters_and_weights(self, record_factors):
         for namespace, feature in record_factors.iteritems():
             if isinstance(feature, PlainFeature):
                 value = self.process_missing_values(namespace, feature)
-                weight, g_square = self.weights_storage[namespace].get(feature.name, (0, 0))
                 s = self.normalizing_s[namespace].get(feature.name, 0)
                 if abs(value) > s:
-                    updated_weight = float(weight * (s ** 2)) / (value ** 2)
-                    self.weights_storage[namespace][feature.name] = (updated_weight, g_square)
+                    updated_weight = float(feature.info.weight * (s ** 2)) / (value ** 2)
+                    self.weights_storage[namespace][feature.name] = (updated_weight, feature.info.g_square)
                     self.normalizing_s[namespace][feature.name] = abs(value)
                 if abs(value) > 0:
                     self.normalizing_N += float(abs(value) ** 2) / ((self.normalizing_s[namespace][feature.name]) ** 2)
@@ -126,6 +119,8 @@ class StochasticGradient(object):
         if self.add_bias:
             record.factors["BIAS"] = PlainFeature(1)
 
+        self.set_features_info(record.factors)
+
         record_weight = 1
         if self.subsampling == "hitstat" and record.label.value == self.subsampling_label:
             record_weight = 1.0/self.subsampling_rate
@@ -142,14 +137,12 @@ class StochasticGradient(object):
             value = self.process_missing_values(namespace, feature)
             g = (record.label.value - predicted_label) * value
 
-            weight, g_square = self.weights_storage[namespace].get(feature.name, (0, 0))
-
             if self.normalize_plain_features and self.normalizing_s[namespace].get(feature.name) is not None:
                 features_normalizer = math.sqrt(float(self.iterations)/self.normalizing_N) / self.normalizing_s[namespace][feature.name] ** 2
             else:
                 features_normalizer = 1
 
-            self.weights_storage[namespace][feature.name] = (weight + self.rate_func(g_square) * features_normalizer * record_weight * g, g_square + record_weight * (g ** 2))
+            self.weights_storage[namespace][feature.name] = (feature.info.weight + self.rate_func(feature.info.g_square) * features_normalizer * record_weight * g, feature.info.g_square + record_weight * (g ** 2))
 
         if self.progressive_validation:
             self.progressive_validation_queue.append((record_weight * ll([record.label.value],[predicted_label]),record_weight))
@@ -210,7 +203,7 @@ class StochasticGradient(object):
         total = 0
         for namespace, feature in factors.iteritems():
             value = self.process_missing_values(namespace, feature)
-            total += self.weights_storage[namespace].get(feature.name, (0,0))[0] * value
+            total += feature.info.weight * value
         try:
             p = 1.0/(1 + math.exp(-1 * total))
             return p / (p + (1-p)/self.subsampling_rate)
