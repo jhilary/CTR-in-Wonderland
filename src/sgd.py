@@ -85,7 +85,7 @@ class StochasticGradient(object):
                 s = self.normalizing_s[namespace].get(feature.name, 0)
                 if abs(value) > s:
                     updated_weight = float(feature.info.weight * (s ** 2)) / (value ** 2)
-                    self.weights_storage[namespace][feature.name] = (updated_weight, feature.info.g_square)
+                    feature.info.weight = updated_weight
                     self.normalizing_s[namespace][feature.name] = abs(value)
                 if abs(value) > 0:
                     self.normalizing_N += float(abs(value) ** 2) / ((self.normalizing_s[namespace][feature.name]) ** 2)
