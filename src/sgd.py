@@ -17,8 +17,8 @@ class StochasticGradient(object):
     def ada_grad_rate(self, g_square=0):
         return float(self.rate_ada_grad_alpha)/(self.rate_ada_grad_beta + math.sqrt(g_square))
 
-    def poisson_feature_filter(self, namespace, feature):
-        if isinstance(feature, CategoricalFeature) and self.weights_storage[namespace].get(feature.name) is None:
+    def poisson_feature_filter(self, feature):
+        if isinstance(feature, CategoricalFeature) and not feature.info.is_used_before:
             return random.random() < 1.0/self.feature_filter_poisson_min_shows
         return True
 
@@ -74,9 +74,17 @@ class StochasticGradient(object):
 
         self.feature_counter = 0
 
-    def set_features_info(self, record_factors):
+    def load_features_info(self, record_factors):
         for namespace, feature in record_factors.iteritems():
-            feature.info = FeatureInfo(*self.weights_storage[namespace].get(feature.name, (0, 0)))
+            storage_value = self.weights_storage[namespace].get(feature.name)
+            if storage_value is None:
+                feature.info = FeatureInfo(0, 0, is_used_before=False)
+            else:
+                feature.info = FeatureInfo(*storage_value, is_used_before=True)
+
+    def save_features_info(self, record_factors):
+        for namespace, feature in record_factors.iteritems():
+            self.weights_storage[namespace][feature.name] = (feature.info.weight, feature.info.g_square)
 
     def update_ng_normalize_parameters_and_weights(self, record_factors):
         for namespace, feature in record_factors.iteritems():
@@ -119,7 +127,7 @@ class StochasticGradient(object):
         if self.add_bias:
             record.factors["BIAS"] = PlainFeature(1)
 
-        self.set_features_info(record.factors)
+        self.load_features_info(record.factors)
 
         record_weight = 1
         if self.subsampling == "hitstat" and record.label.value == self.subsampling_label:
@@ -131,7 +139,7 @@ class StochasticGradient(object):
         predicted_label = self.predict_proba(record.factors)
 
         for namespace, feature in record.factors.iteritems():
-            if not self.feature_filter_func(namespace, feature):
+            if not self.feature_filter_func(feature):
                 continue
 
             value = self.process_missing_values(namespace, feature)
@@ -142,10 +150,13 @@ class StochasticGradient(object):
             else:
                 features_normalizer = 1
 
-            self.weights_storage[namespace][feature.name] = (feature.info.weight + self.rate_func(feature.info.g_square) * features_normalizer * record_weight * g, feature.info.g_square + record_weight * (g ** 2))
+            feature.info.weight += self.rate_func(feature.info.g_square) * features_normalizer * record_weight * g
+            feature.info.g_square += record_weight * (g ** 2)
 
         if self.progressive_validation:
             self.progressive_validation_queue.append((record_weight * ll([record.label.value],[predicted_label]),record_weight))
+
+        self.save_features_info(record.factors)
 
     def _choose_algo(self, label):
         if label == "sg":
@@ -165,7 +176,7 @@ class StochasticGradient(object):
 
     def _choose_feature_filter(self, label):
         if label == "none":
-            return lambda namespace, feature: True
+            return lambda feature: True
         if label == "poisson":
             return self.poisson_feature_filter
         raise ValueError("There are no filters with label %s; Choose: none, poisson")

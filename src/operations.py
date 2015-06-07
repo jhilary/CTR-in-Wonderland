@@ -34,7 +34,7 @@ def validate(records_generator, model, storage_predictions_dumping_depth, storag
         else:
             clicks += 1
         record.factors["BIAS"] = PlainFeature(1)
-        model.set_features_info(record.factors)
+        model.load_features_info(record.factors)
         result_ll += ll([record.label.value], [model.predict_proba(record.factors)])
         if records_generator.counter_filtered % storage_predictions_dumping_depth == 0:
             metric = Metric(records_generator.counter, records_generator.counter_filtered, (datetime.now() - start_time).total_seconds(), get_memory_usage(), result_ll/records_generator.counter_filtered, clicks, not_clicks, model.weights_storage.features_count, storage.get_model_size()) # total_seconds?
@@ -48,5 +48,5 @@ def validate(records_generator, model, storage_predictions_dumping_depth, storag
 def predict(records_generator, model, storage, identifier):
     for record in records_generator():
         record.factors["BIAS"] = PlainFeature(1)
-        model.set_features_info(record.factors)
+        model.load_features_info(record.factors)
         storage.save_predictions([Prediction(record.record_id.value, model.predict_proba(record.factors))], identifier)

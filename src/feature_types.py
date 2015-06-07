@@ -1,5 +1,6 @@
 class FeatureInfo():
-    def __init__(self, weight, g_square):
+    def __init__(self, weight, g_square, is_used_before):
+        self.is_used_before = is_used_before
         self.weight = weight
         self.g_square = g_square
 
