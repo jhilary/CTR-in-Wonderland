@@ -5,6 +5,7 @@ import argparse
 import pickle
 import os
 import cPickle
+import marshal
 from collections import MutableMapping
 from functools import partial
 from collections import defaultdict
@@ -29,11 +30,14 @@ class DictStorage(defaultdict):
     def save(self, f):
         pickle.dump(self, f)
 
+    @property
+    def features_count(self):
+        return sum([len(features) for namespace, features in self._storage.iteritems()] + [0])
 
 class BerkeleyDictWrapper(MutableMapping):
     def __init__(self, path):
         super(BerkeleyDictWrapper, self).__init__()
-        self.bsdb_dict = bsddb.hashopen(path,cachesize=751619276L)
+        self.bsdb_dict = bsddb.hashopen(path,cachesize=2*1024*1024*1024 - 1)
 
     def __repr__(self):
         return repr(self.bsdb_dict)
@@ -42,10 +46,10 @@ class BerkeleyDictWrapper(MutableMapping):
         return str(self.bsdb_dict)
 
     def __getitem__(self, key):
-        return cPickle.loads(self.bsdb_dict[key])
+        return marshal.loads(self.bsdb_dict[key])
 
     def __setitem__(self, key, value):
-        self.bsdb_dict[key] = cPickle.dumps(value)
+        self.bsdb_dict[key] = marshal.dumps(value)
 
     def __contains__(self, key):
         return key in self.bsdb_dict
@@ -59,6 +63,8 @@ class BerkeleyDictWrapper(MutableMapping):
     def __len__(self):
         return len(self.bsdb_dict)
 
+    def sync(self):
+        self.bsdb_dict.sync()
 
 class BerkeleyStorage(MutableMapping):
     module = "ciw.main"
@@ -102,8 +108,8 @@ class BerkeleyStorage(MutableMapping):
         self._storage = {}
 
     def __getstate__(self):
-        for val in self._storage.values():
-            val.sync()
+        for namespace_storage in self._storage.values():
+            namespace_storage.sync()
         odict = self.__dict__.copy() # copy the dict since we change it
         del odict['_storage']
         return odict
@@ -114,6 +120,10 @@ class BerkeleyStorage(MutableMapping):
 
     def save(self, f):
         pass
+
+    @property
+    def features_count(self):
+        return sum([len(features) for namespace, features in self._storage.iteritems()] + [0])
 
 
 def filter_not_clicks(record, subsampling_rate):
@@ -166,10 +176,10 @@ def ciw():
     args = parser.parse_args()
 
     if args.mode == 'learn':
-        storage = LocalFileStorage(args.storage_path, args.storage_label)
+        storage = LocalFileStorage(args.storage_path, args.storage_label, clean_before_use=True)
         storage.save_parameters(sorted(args.__dict__.iteritems(), key=lambda v: v[0]))
 
-        args.weights_storage = str_to_function(args.weights_storage)(database_folder="/home/mikari/Berkeley")
+        args.weights_storage = str_to_function(args.weights_storage)(database_folder=storage.berkeley_database_path)
         if args.subsampling == 'hitstat':
             records_filter = partial(filter_not_clicks, subsampling_rate=args.subsampling_rate)
             records_generator = RecordsGenerator(sys.stdin, records_filter)

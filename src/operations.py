@@ -10,14 +10,14 @@ def learn(records_generator, storage, model, storage_metrics_dumping_depth, stor
     for record in records_generator():
         model.learn(record)
         if model.iterations % storage_metrics_dumping_depth == 0:
-            metric = Metric(records_generator.counter, model.iterations, (datetime.now() - start_time).seconds, get_memory_usage(), model.progressive_validation_logloss, model.clicks, model.not_clicks) # total_seconds?
+            metric = Metric(records_generator.counter, model.iterations, (datetime.now() - start_time).total_seconds(), get_memory_usage(), model.progressive_validation_logloss, model.clicks, model.not_clicks, model.weights_storage.features_count, storage.get_model_size()) # total_seconds?
             storage.save_metrics([metric])
             storage.dump_weights_storage(model.weights_storage)
         if model.iterations % storage_model_dumping_depth == 0:
             storage.save(model)
     #save metrics at the end of all iterations
     if model.iterations % storage_metrics_dumping_depth != 0:
-        metric = Metric(records_generator.counter, model.iterations, (datetime.now() - start_time).seconds, get_memory_usage(), model.progressive_validation_logloss, model.clicks, model.not_clicks) # total_seconds?
+        metric = Metric(records_generator.counter, model.iterations, (datetime.now() - start_time).total_seconds(), get_memory_usage(), model.progressive_validation_logloss, model.clicks, model.not_clicks, model.weights_storage.features_count, storage.get_model_size()) # total_seconds?
         storage.save_metrics([metric])
         storage.dump_weights_storage(model.weights_storage)
         storage.save(model)
@@ -36,11 +36,11 @@ def validate(records_generator, model, storage_predictions_dumping_depth, storag
         record.factors["BIAS"] = PlainFeature(1)
         result_ll += ll([record.label.value], [model.predict_proba(record.factors)])
         if records_generator.counter_filtered % storage_predictions_dumping_depth == 0:
-            metric = Metric(records_generator.counter, records_generator.counter_filtered, (datetime.now() - start_time).seconds, get_memory_usage(), result_ll/records_generator.counter_filtered, clicks, not_clicks) # total_seconds?
+            metric = Metric(records_generator.counter, records_generator.counter_filtered, (datetime.now() - start_time).total_seconds(), get_memory_usage(), result_ll/records_generator.counter_filtered, clicks, not_clicks, model.weights_storage.features_count, storage.get_model_size()) # total_seconds?
             storage.save_metrics([metric], identifier)
     #save metrics at the end of all iterations
     if model.iterations % storage_predictions_dumping_depth != 0:
-        metric = Metric(records_generator.counter, records_generator.counter_filtered, (datetime.now() - start_time).seconds, get_memory_usage(), result_ll/records_generator.counter_filtered, clicks, not_clicks) # total_seconds?
+        metric = Metric(records_generator.counter, records_generator.counter_filtered, (datetime.now() - start_time).total_seconds(), get_memory_usage(), result_ll/records_generator.counter_filtered, clicks, not_clicks, model.weights_storage.features_count, storage.get_model_size()) # total_seconds?
         storage.save_metrics([metric], identifier)
 
 

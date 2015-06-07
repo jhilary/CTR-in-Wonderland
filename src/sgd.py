@@ -4,6 +4,10 @@ from collections import deque, defaultdict
 from ciw.metrics import ll
 from ciw.feature_types import PlainFeature, CategoricalFeature
 
+class FeatureInfo():
+    def __init__(self, weight, g_square):
+        self.weight = weight
+        self.g_square = g_square
 
 class StochasticGradient(object):
 
@@ -45,7 +49,6 @@ class StochasticGradient(object):
         self.missing_plain_values = missing_plain_features
         self.normalize_plain_features = normalize_plain_features
         self.iterations = 0
-
         self.learn = self._choose_algo(self.algorithm)
         self.rate_func = self._choose_rate(self.rate)
         self.feature_filter_func = self._choose_feature_filter(self.feature_filter)
@@ -71,6 +74,15 @@ class StochasticGradient(object):
 
         self.clicks = 0
         self.not_clicks = 0
+
+        self.feature_counter = 0
+
+
+    # def get_features_info(self, record_factors):
+    #     features_info = {}
+    #     for namespace, feature in record_factors.iteritems():
+    #         features_info[(namespace, feature)] = FeatureInfo(*self.weights_storage[namespace].get(feature.name, (0, 0)))
+    #     return features_info
 
     def update_ng_normalize_parameters_and_weights(self, record_factors):
         for namespace, feature in record_factors.iteritems():

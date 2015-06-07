@@ -19,7 +19,7 @@ class RecordsGenerator(object):
     @staticmethod
     def create_types(headers):
         types = []
-        for header in headers.split(","):
+        for header in headers.strip().split(","):
             if header.startswith("CA") or header.startswith("AT"): #DAFUQ
                 types.append((header, CategoricalFeature))
             elif header.startswith("NUM"):

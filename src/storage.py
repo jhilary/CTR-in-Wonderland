@@ -5,8 +5,9 @@ import importlib
 import cPickle
 
 from collections import namedtuple
+from ciw.utils import du
 
-Metric = namedtuple("Metric", ["records", "iterations", "time", "memory", "logloss", "clicks", "not_clicks"])
+Metric = namedtuple("Metric", ["records", "iterations", "time", "memory", "logloss", "clicks", "not_clicks", "features", "disk_usage"])
 Prediction = namedtuple("Prediction", ["record_id", 'value'])
 
 
@@ -17,7 +18,7 @@ class MetricsGenerator(object):
     def __call__(self):
         self.stream.readline()
         for line in self.stream:
-            records, iteration, time_for_iterations, memory, logloss, clicks, not_clicks = line.split("\t")
+            records, iteration, time_for_iterations, memory, logloss, clicks, not_clicks, features, disk_usage = line.split("\t")
             records = int(records)
             iteration = int(iteration)
             time_for_iterations = int(time_for_iterations)
@@ -25,7 +26,9 @@ class MetricsGenerator(object):
             logloss = float(logloss) if logloss is not "-" else None
             clicks = int(clicks)
             not_clicks = int(not_clicks)
-            yield Metric(records, iteration, time_for_iterations, memory, logloss, clicks, not_clicks)
+            features = int(features)
+            disk_usage = float(disk_usage)
+            yield Metric(records, iteration, time_for_iterations, memory, logloss, clicks, not_clicks, features, disk_usage)
 
 
 def create_dir_if_not_exists(path):
@@ -36,14 +39,16 @@ def create_dir_if_not_exists(path):
 def save_metrics(path, metrics):
     for metric in metrics:
         with open(path, 'a', 0) as f:
-            f.write("%s\t%s\t%s\t%s\t%s\t%s\t%s\n" % (
+            f.write("%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" % (
                 metric.records,
                 metric.iterations,
-                metric.time,
+                int(metric.time),
                 metric.memory if metric.memory is not None else '-',
                 metric.logloss if metric.logloss is not None else '-',
                 metric.clicks,
-                metric.not_clicks)
+                metric.not_clicks,
+                metric.features,
+                metric.disk_usage)
             )
 
 def save_predictions(path, predictions):
@@ -60,18 +65,20 @@ def init_predictions(path):
 
 def init_metrics(path):
     with open(path, 'w', 0) as f:
-        f.write("# Records\tIterations\tTime\tMemory\tLogloss\tClicks\tNotClicks\n")
+        f.write("# Records\tIterations\tTime\tMemory\tLogloss\tClicks\tNotClicks\tFeatures\tDiskUsage\n")
 
 
 class LocalFileStorage(object):
-    def __init__(self, path, identifier):
+    def __init__(self, path, identifier, clean_before_use=False):
         self.root_path = path
         self.work_path_dir = os.path.join(path, identifier)
+        self.berkeley_database_path = os.path.join(self.work_path_dir, "bk")
         self.__parameters_path = os.path.join(self.work_path_dir, "parameters.yml")
         self.__weights_path = os.path.join(self.work_path_dir, "weights")
         self._model_path = os.path.join(self.work_path_dir, "model")
         self.is_initialized_metrics = set()
         self.is_initialized_predictions = set()
+        self.clean_before_use = clean_before_use
         self.init()
 
     def __metrics_path(self, identifier='metrics.tsv'):
@@ -81,7 +88,10 @@ class LocalFileStorage(object):
         return os.path.join(self.work_path_dir, identifier)
 
     def init(self):
+        if self.clean_before_use and os.path.exists(self.berkeley_database_path):
+            shutil.rmtree(self.berkeley_database_path)
         create_dir_if_not_exists(self.work_path_dir)
+        create_dir_if_not_exists(self.berkeley_database_path)
 
     def save_parameters(self, parameters):
         with open(self.__parameters_path, 'w', 0) as f:
@@ -147,3 +157,9 @@ class LocalFileStorage(object):
 
         return weights_storage
 
+    def get_model_size(self):
+        total_size = 0
+        total_size += du(self.berkeley_database_path)
+        if os.path.exists(self._model_path):
+            total_size += du(self._model_path)
+        return total_size
