@@ -15,7 +15,7 @@ from ciw.storage import LocalFileStorage
 from ciw.utils import str_to_function
 from ciw.operations import predict, learn, validate
 
-import bsddb
+#import bsddb
 
 class DictStorage(defaultdict):
     module = "ciw.main"
@@ -33,7 +33,7 @@ class DictStorage(defaultdict):
     @property
     def features_count(self):
         return sum([len(features) for namespace, features in self.iteritems()] + [0])
-
+'''
 class BerkeleyDictWrapper(MutableMapping):
     def __init__(self, path):
         super(BerkeleyDictWrapper, self).__init__()
@@ -124,7 +124,7 @@ class BerkeleyStorage(MutableMapping):
     @property
     def features_count(self):
         return sum([len(features) for namespace, features in self._storage.iteritems()] + [0])
-
+'''
 
 def filter_not_clicks(record, subsampling_rate):
     return record.label.value == 1 or random.random() < subsampling_rate
