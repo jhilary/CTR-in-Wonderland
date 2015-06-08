@@ -1,10 +1,13 @@
-import scipy as sp
+from math import log
 
-
-def ll(act, pred):
+def ll(acts, preds):
     epsilon = 1e-15
-    pred = sp.maximum(epsilon, pred)
-    pred = sp.minimum(1-epsilon, pred)
-    ll = (sum(act*sp.log(pred) + sp.subtract(1,act)*sp.log(sp.subtract(1,pred))))
-    ll = ll * -1.0/len(act)
+    ll = 0
+    for act, pred in zip(acts, preds):
+        if pred < epsilon:
+            pred = epsilon
+        if pred > 1 - epsilon:
+            pred = 1 - epsilon
+        ll += act*log(pred) + (1-act)*log(1-pred)
+    ll = ll * -1.0 / len(acts)
     return ll

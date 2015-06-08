@@ -32,7 +32,7 @@ class DictStorage(defaultdict):
 
     @property
     def features_count(self):
-        return sum([len(features) for namespace, features in self._storage.iteritems()] + [0])
+        return sum([len(features) for namespace, features in self.iteritems()] + [0])
 
 class BerkeleyDictWrapper(MutableMapping):
     def __init__(self, path):
